@@ -3,62 +3,98 @@
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
-
 import NodeFetchCache, { MemoryCache } from 'node-fetch-cache';
-
 
 const app = express();
 const router = express.Router();
-const port = 3000;
-// (Optional) Simple ping endpoint for external monitors:
-router.get('/ping', (req, res) => {
-  return res.send('pong');
-});
+const port = process.env.PORT || 3000;
+
+
+// Simple ping endpoint
+router.get('/ping', (req, res) => res.send('pong'));
 
 const fetch = NodeFetchCache.create({
-    cache: new MemoryCache({ ttl: 60000 }),
-    shouldCacheResponse: (response) => response.ok,
+  cache: new MemoryCache({ ttl: 60000 }),
+  shouldCacheResponse: (response) => response.ok,
 });
 
+// Main handler for /d/:token and /i/:token
+router.get(/([di])\/([A-Za-z0-9_-]+)\/?(.*)?/, async (req, res) => {
+  try {
+    const match = req.originalUrl.match(/([di])\/([A-Za-z0-9_-]+)\/?(.*)?/);
+    if (!match) return res.redirect('/');
 
-router.get(/([di])\/([A-Za-z0-9_-]+)\/?(.*)?/, async (req, res, next) => {
-    try {
-        const match = req.originalUrl.match(/([di])\/([A-Za-z0-9_-]+)\/?(.*)?/);
-        const type = match[1];
-        const hash = match[2];
-        const path = match[3] ? `path=/${match[3]}&` : '';
-        const publicKeyUrl = `https://disk.yandex.ru/${type}/${hash}`;
-        const redirectUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?${path}public_key=${publicKeyUrl}`;
-        const response = await fetch(redirectUrl);
-        const result = await response.json();
-        if (response.ok) {
-            res.redirect(result.href);
-        } else {
-            res.json(result);
-        };
-    } catch(e) {
-        res.redirect('/');
-    };
-});
+    const type = match[1]; // 'd' or 'i'
+    const hash = match[2];
+    const path = match[3] ? `path=/${match[3]}&` : '';
+    const publicKeyUrl = `https://disk.yandex.ru/${type}/${hash}`;
+    const apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?${path}public_key=${publicKeyUrl}`;
 
-router.all('*', (req, res) => {
+    const response = await fetch(apiUrl);
+    const result = await response.json();
+
+    if (!response.ok || !result.href) {
+      return res.status(response.status || 500).type('html').send(`
+        <!DOCTYPE html>
+        <html>
+          <head><title>Error</title></head>
+          <body>
+            <h1>Error: Unable to generate download link</h1>
+            <p><a href="/">Return home</a></p>
+          </body>
+        </html>
+      `);
+    }
+
+    if (type === 'i') {
+      // For image preview (or iframe usage), use 302 redirect
+      return res.redirect(result.href);
+    }
+
+    // For direct download (/d/), return HTML with meta-refresh + JS redirect
+    const html = `
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <title>Redirecting...</title>
+          <meta http-equiv="refresh" content="0; url=${result.href}" />
+        </head>
+        <body>
+          <script>
+            window.location.href = ${JSON.stringify(result.href)};
+          </script>
+          <noscript>
+            <p>If you're not redirected, <a href="${result.href}">click here</a>.</p>
+          </noscript>
+        </body>
+      </html>
+    `;
+    res.status(200).type('html').send(html);
+
+  } catch (e) {
     res.redirect('/');
+  }
 });
 
+// Fallback for unknown routes
+router.all('*', (req, res) => {
+  res.redirect('/');
+});
 
+// App config and middleware
 app.set('json spaces', 2);
 app.set('x-powered-by', false);
 
 app.use(
-    cors(),
-    helmet({ contentSecurityPolicy: false, xDownloadOptions: false }),
-    express.urlencoded({ extended: false }),
-    express.json(),
-    express.static('./public'),
-    router,
+  cors(),
+  helmet({ contentSecurityPolicy: false, xDownloadOptions: false }),
+  express.urlencoded({ extended: false }),
+  express.json(),
+  express.static('./public'),
+  router
 );
 
-
 app.listen(port, () => {
-    console.log(`listening at ${port}/tcp`);
+  console.log(`listening at ${port}/tcp`);
 });
