@@ -58,7 +58,7 @@ router.get(/([di])\/([A-Za-z0-9_-]+)\/?(.*)?/, async (req, res) => {
         <head>
           <meta charset="UTF-8" />
           <title>Downloading...</title>
-          <meta name="referrer" content="none" />
+          <meta name="referrer" content="no-referrer" />
           <meta name="robots" content="noindex,nofollow" />
           <meta http-equiv="refresh" content="0; url=${result.href}" />
         </head>
