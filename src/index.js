@@ -27,7 +27,7 @@ router.get(/([di])\/([A-Za-z0-9_-]+)\/?(.*)?/, async (req, res) => {
     const type = match[1]; // 'd' or 'i'
     const hash = match[2];
     const path = match[3] ? `path=/${match[3]}&` : '';
-    const publicKeyUrl = `https://disk.yandex.ru/${type}/${hash}`;
+    const publicKeyUrl = `https://disk.yandex.com/${type}/${hash}`;
     const apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?${path}public_key=${publicKeyUrl}`;
 
     const response = await fetch(apiUrl);
