@@ -27,41 +27,49 @@ router.get(/([di])\/([A-Za-z0-9_-]+)\/?(.*)?/, async (req, res) => {
     const type = match[1]; // 'd' or 'i'
     const hash = match[2];
     const path = match[3] ? `path=/${match[3]}&` : '';
+    const publicKeyUrl = `https://disk.yandex.ru/${type}/${hash}`;
+    const apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?${path}public_key=${publicKeyUrl}`;
 
-    // Get resource_key and path from query parameters
-    const resourceKey = req.query.resource_key;
-    const pathParam = req.query.path;
-
-    // Accept full public_url as query param for maximum compatibility
-    let publicKeyUrl = req.query.public_url;
-    if (!publicKeyUrl) {
-      publicKeyUrl = `https://disk.yandex.com/${type}/${hash}`;
-      const urlParams = [];
-      if (resourceKey) urlParams.push(`resource_key=${encodeURIComponent(resourceKey)}`);
-      if (pathParam) urlParams.push(`path=${encodeURIComponent(pathParam)}`);
-      if (urlParams.length) publicKeyUrl += `?${urlParams.join('&')}`;
-    }
-
-    const apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=${encodeURIComponent(publicKeyUrl)}`;
     const response = await fetch(apiUrl);
     const result = await response.json();
 
-    // Debug log for troubleshooting
     if (!response.ok || !result.href) {
-      console.error('Yandex API error:', {
-        status: response.status,
-        statusText: response.statusText,
-        apiUrl,
-        result
-      });
-      return res.status(response.status || 500).type('html').send(`
+      // Show a fallback page with an iframe to Yandex Disk. If iframe fails, show a download button.
+      return res.status(200).type('html').send(`
         <!DOCTYPE html>
-        <html>
-          <head><title>Error</title></head>
-          <body>
-            <h1>Error: Unable to generate download link</h1>
-            <pre>Status: ${response.status} ${response.statusText}</pre>
-            <pre>${JSON.stringify(result, null, 2)}</pre>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <title>Manual Download Required</title>
+            <meta name="referrer" content="no-referrer" />
+            <meta name="robots" content="noindex,nofollow" />
+            <style>
+              #fallbackBtn { display: none; }
+              iframe { width: 100%; max-width: 600px; height: 500px; border: 1px solid #ccc; margin: 2em auto; display: block; }
+            </style>
+          </head>
+          <body style="font-family:sans-serif;text-align:center;padding:2em;">
+            <h1>Direct download not available</h1>
+            <p>This file cannot be downloaded automatically. You can interact with the Yandex Disk page below, or use the button if it does not load.</p>
+            <iframe id="yadiskFrame" src="https://disk.yandex.com/${type}/${hash}" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+            <button id="fallbackBtn" style="font-size:1.2em;padding:0.5em 2em;cursor:pointer;">Open in Yandex Disk</button>
+            <script>
+              // If iframe fails to load (blocked by X-Frame-Options), show the button
+              var iframe = document.getElementById('yadiskFrame');
+              var fallbackBtn = document.getElementById('fallbackBtn');
+              var iframeLoaded = false;
+              iframe.onload = function() { iframeLoaded = true; };
+              setTimeout(function() {
+                if (!iframeLoaded) {
+                  iframe.style.display = 'none';
+                  fallbackBtn.style.display = 'inline-block';
+                }
+              }, 2500);
+              fallbackBtn.onclick = function() {
+                window.open('https://disk.yandex.com/${type}/${hash}', '_blank');
+              };
+            </script>
+            <p style="color:#888;font-size:small;">(If the preview does not load, use the button above. The direct link is not shown for privacy.)</p>
             <p><a href="/">Return home</a></p>
           </body>
         </html>
@@ -79,12 +87,17 @@ router.get(/([di])\/([A-Za-z0-9_-]+)\/?(.*)?/, async (req, res) => {
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <title>Redirecting...</title>
+          <title>Downloading...</title>
+          <meta name="referrer" content="no-referrer" />
+          <meta name="robots" content="noindex,nofollow" />
           <meta http-equiv="refresh" content="0; url=${result.href}" />
         </head>
         <body>
           <script>
             window.location.href = ${JSON.stringify(result.href)};
+            setTimeout(function() {
+              window.close();
+            }, 3000); // Try to close the tab after 3 seconds
           </script>
           <noscript>
             <p>If you're not redirected, <a href="${result.href}">click here</a>.</p>
