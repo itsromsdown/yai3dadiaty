@@ -27,8 +27,19 @@ router.get(/([di])\/([A-Za-z0-9_-]+)\/?(.*)?/, async (req, res) => {
     const type = match[1]; // 'd' or 'i'
     const hash = match[2];
     const path = match[3] ? `path=/${match[3]}&` : '';
-    const publicKeyUrl = `https://disk.yandex.com/${type}/${hash}`;
-    const apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?${path}public_key=${publicKeyUrl}`;
+
+    // Get resource_key and path from query parameters
+    const resourceKey = req.query.resource_key;
+    const pathParam = req.query.path;
+
+    // Build the full share URL as public_key
+    let publicKeyUrl = `https://disk.yandex.com/${type}/${hash}`;
+    const urlParams = [];
+    if (resourceKey) urlParams.push(`resource_key=${encodeURIComponent(resourceKey)}`);
+    if (pathParam) urlParams.push(`path=${encodeURIComponent(pathParam)}`);
+    if (urlParams.length) publicKeyUrl += `?${urlParams.join('&')}`;
+
+    const apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=${encodeURIComponent(publicKeyUrl)}`;
 
     const response = await fetch(apiUrl);
     const result = await response.json();
@@ -57,17 +68,12 @@ router.get(/([di])\/([A-Za-z0-9_-]+)\/?(.*)?/, async (req, res) => {
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <title>Downloading...</title>
-          <meta name="referrer" content="no-referrer" />
-          <meta name="robots" content="noindex,nofollow" />
+          <title>Redirecting...</title>
           <meta http-equiv="refresh" content="0; url=${result.href}" />
         </head>
         <body>
           <script>
             window.location.href = ${JSON.stringify(result.href)};
-            setTimeout(function() {
-              window.close();
-            }, 3000); // Try to close the tab after 3 seconds
           </script>
           <noscript>
             <p>If you're not redirected, <a href="${result.href}">click here</a>.</p>
