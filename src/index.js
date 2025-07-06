@@ -32,17 +32,25 @@ router.get(/([di])\/([A-Za-z0-9_-]+)\/?(.*)?/, async (req, res) => {
     const resourceKey = req.query.resource_key;
     const pathParam = req.query.path;
 
-    // Build the full share URL as public_key
+    // Try .com domain first, then .ru if not found
     let publicKeyUrl = `https://disk.yandex.com/${type}/${hash}`;
     const urlParams = [];
     if (resourceKey) urlParams.push(`resource_key=${encodeURIComponent(resourceKey)}`);
     if (pathParam) urlParams.push(`path=${encodeURIComponent(pathParam)}`);
     if (urlParams.length) publicKeyUrl += `?${urlParams.join('&')}`;
 
-    const apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=${encodeURIComponent(publicKeyUrl)}`;
+    let apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=${encodeURIComponent(publicKeyUrl)}`;
+    let response = await fetch(apiUrl);
+    let result = await response.json();
 
-    const response = await fetch(apiUrl);
-    const result = await response.json();
+    // If not found, try .ru domain
+    if (!response.ok || !result.href) {
+      publicKeyUrl = `https://disk.yandex.ru/${type}/${hash}`;
+      if (urlParams.length) publicKeyUrl += `?${urlParams.join('&')}`;
+      apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=${encodeURIComponent(publicKeyUrl)}`;
+      response = await fetch(apiUrl);
+      result = await response.json();
+    }
 
     // Debug log for troubleshooting
     if (!response.ok || !result.href) {
