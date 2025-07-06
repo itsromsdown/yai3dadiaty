@@ -44,13 +44,22 @@ router.get(/([di])\/([A-Za-z0-9_-]+)\/?(.*)?/, async (req, res) => {
     const response = await fetch(apiUrl);
     const result = await response.json();
 
+    // Debug log for troubleshooting
     if (!response.ok || !result.href) {
+      console.error('Yandex API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        apiUrl,
+        result
+      });
       return res.status(response.status || 500).type('html').send(`
         <!DOCTYPE html>
         <html>
           <head><title>Error</title></head>
           <body>
             <h1>Error: Unable to generate download link</h1>
+            <pre>Status: ${response.status} ${response.statusText}</pre>
+            <pre>${JSON.stringify(result, null, 2)}</pre>
             <p><a href="/">Return home</a></p>
           </body>
         </html>
